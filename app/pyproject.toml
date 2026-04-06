@@ -87,3 +87,12 @@ package = false
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+markers = [
+    "contract: 契約テスト - 旧実装の最低保証を固定",
+    "equivalence: 同値テスト - memx代替経路との意味的一致確認",
+    "disabled_mode: 状態テスト - read_only/disabled状態での挙動確認",
+    "deletion_simulation: 削除シミュレーション - import欠落と直依存の検知",
+    "real_api: 実API前提テスト - memx-resolver起動時のみ実行",
+]

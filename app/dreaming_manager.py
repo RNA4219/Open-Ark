@@ -12,12 +12,11 @@ import time
 import constants
 import config_manager
 import utils
-import rag_manager
 import room_manager
 from llm_factory import LLMFactory
-from entity_memory_manager import EntityMemoryManager
+# entity_memory_manager は削除済み - entity_tools / memx 経路を使用
 from goal_manager import GoalManager
-from episodic_memory_manager import EpisodicMemoryManager
+# episodic_memory_manager は削除済み - memx journal 経路を使用
 import summary_manager
 
 class DreamingManager:
@@ -297,22 +296,20 @@ class DreamingManager:
         except Exception as e:
             return f"クエリ生成に失敗しました: {e}"
 
-        # RAG Manager 初期化
-        # RAG自体のエラーで夢想が止まらないよう、初期化と検索をガード
+        # memx 経路で検索（rag_manager 削除済み）
         search_results = []
         try:
-            rag = rag_manager.RAGManager(self.room_name, self.api_key)
-            search_results = rag.search(search_query, k=5)
-            
-            if not search_results:
-                print("  - [Dreaming] 検索結果が空です。RAG索引の更新を試みます...")
-                try:
-                    rag.update_memory_index()
-                    search_results = rag.search(search_query, k=5)
-                except Exception as e:
-                    print(f"  - [Dreaming] RAG索引の更新に失敗しました（フォールバックします）: {e}")
+            from tools.memx_tools import memx_search
+            result = memx_search.invoke({
+                "query": search_query,
+                "room_name": self.room_name,
+                "top_k": 5
+            })
+            # memx_search の結果が空でない場合
+            if result and "見つかりません" not in result:
+                search_results = result  # テキスト結果として扱う
         except Exception as e:
-            print(f"  - [Dreaming] RAG検索の初期化中にエラーが発生しました（直近会話のみで続行）: {e}")
+            print(f"  - [Dreaming] memx検索中にエラーが発生しました（直近会話のみで続行）: {e}")
 
         if not search_results:
             print("  - [Dreaming] 関連する過去の記憶が見つかりませんでした。直近の会話のみで夢を見ます。")
@@ -447,25 +444,33 @@ class DreamingManager:
             # --- [Phase 2] エンティティ記憶の自動更新 ---
             should_update_entity = effective_settings.get("sleep_consolidation", {}).get("update_entity_memory", True)
             entity_updates = dream_data.get("entity_updates", [])
-            
+
             if entity_updates and should_update_entity:
-                em_manager = EntityMemoryManager(self.room_name)
+                # entity_memory_manager 削除済み - memx_ingest 経路を使用
+                from tools.memx_tools import memx_ingest
                 for update in entity_updates:
                     e_name = update.get("entity_name")
                     e_content = update.get("content")
-                    # デフォルトを追記から統合(consolidate)に変更
                     e_consolidate = update.get("consolidate", True)
-                    
+
                     if e_name and e_content:
-                        res = em_manager.create_or_update_entry(e_name, e_content, consolidate=e_consolidate, api_key=self.api_key)
-                        print(f"  - [Dreaming] エンティティ記憶 '{e_name}' を自動更新（統合）しました: {res}")
-            
+                        try:
+                            res = memx_ingest.invoke({
+                                "store": "knowledge",
+                                "title": e_name,
+                                "body": e_content,
+                                "room_name": self.room_name,
+                                "metadata": {"consolidate": e_consolidate}
+                            })
+                            print(f"  - [Dreaming] エンティティ記憶 '{e_name}' を自動更新（memx経路）: {res}")
+                        except Exception as e:
+                            print(f"  - [Dreaming] エンティティ更新エラー '{e_name}': {e}")
+
             # --- [Maintenance] 定期的な記憶のクリーンアップ ---
-            # 週次(Level 2)以上の省察時に、全エンティティ記憶を再整理する
+            # 週次(Level 2)以上の省察時：entity_memory_manager 削除済み
+            # memx 経路または直接ファイル操作でクリーンアップ
             if reflection_level >= 2 and should_update_entity:
-                print(f"  - [Dreaming] レベル{reflection_level}の省察に伴い、全エンティティの定期メンテナンスを実行します...")
-                em_manager = EntityMemoryManager(self.room_name)
-                em_manager.consolidate_all_entities(self.api_key)
+                print(f"  - [Dreaming] レベル{reflection_level}の省察に伴い、エンティティの定期メンテナンスをスキップ（entity_memory_manager 削除済み）")
             
             # --- [Goal Memory] 目標の自動更新 ---
             goal_updates = dream_data.get("goal_updates", {})
@@ -496,17 +501,10 @@ class DreamingManager:
                 print(f"  - [Dreaming] 目標自動整理エラー: {ce}")
             
             # --- [Arousal Normalization] Arousalインフレ防止 ---
-            # 週次/月次省察時に、全エピソードの平均Arousalが閾値を超えていたら減衰を適用
+            # episodic_memory_manager 削除済み - Arousal 正規化は memx 側で処理
+            # または LocalAdapter 経由で処理
             if reflection_level >= 2:
-                try:
-                    epm = EpisodicMemoryManager(self.room_name)
-                    norm_result = epm.normalize_arousal()
-                    if norm_result["normalized"]:
-                        print(f"  - [Arousal正規化] 平均: {norm_result['before_avg']:.2f} → {norm_result['after_avg']:.2f} ({norm_result['episode_count']}件)")
-                    else:
-                        print(f"  - [Arousal正規化] 閾値以下のため実行スキップ (平均: {norm_result['before_avg']:.2f})")
-                except Exception as ne:
-                    print(f"  - [Arousal正規化] エラー: {ne}")
+                print(f"  - [Arousal正規化] memx 経路を使用してください（episodic_memory_manager 削除済み）")
             
             # --- [Motivation] 未解決の問いを保存 ---
             should_extract_questions = effective_settings.get("sleep_consolidation", {}).get("extract_open_questions", True)
@@ -571,18 +569,30 @@ class DreamingManager:
             
             # --- [Phase 2] 影の僕：エンティティ候補の抽出と提案 ---
             try:
-                em_manager = EntityMemoryManager(self.room_name)
-                existing = em_manager.list_entries()
+                # entity_memory_manager 削除済み - 直接ディレクトリスキャン
+                from pathlib import Path
+                import constants
+                entities_dir = Path(constants.ROOMS_DIR) / self.room_name / "memory" / "entities"
+                existing = [f.stem for f in entities_dir.glob("*.md")] if entities_dir.exists() else []
                 candidates = self._extract_entity_candidates(recent_context, existing)
                 
                 if candidates:
                     print(f"  - [Shadow] {len(candidates)}件のエンティティ候補を抽出しました")
-                    # 各候補に関連する記憶を検索して付与
-                    rag = rag_manager.RAGManager(self.room_name, self.api_key)
-                    for candidate in candidates:
-                        related_memories = rag.search(candidate.get("name", ""), k=3)
-                        candidate["related_context"] = [doc.page_content for doc in related_memories]
-                    
+                    # 各候補に関連する記憶を検索して付与（memx経路）
+                    try:
+                        from tools.memx_tools import memx_search
+                        for candidate in candidates:
+                            result = memx_search.invoke({
+                                "query": candidate.get("name", ""),
+                                "room_name": self.room_name,
+                                "top_k": 3
+                            })
+                            candidate["related_context"] = [result] if result else []
+                    except Exception as memx_e:
+                        print(f"  - [Shadow] memx検索エラー: {memx_e}")
+                        for candidate in candidates:
+                            candidate["related_context"] = []
+
                     # ペルソナへの提案メッセージを生成・キュー
                     proposal = self._format_entity_proposal(candidates)
                     self._queue_system_message(proposal)
@@ -706,22 +716,26 @@ class DreamingManager:
                 entity_name = result.get("entity_name", "")
                 
                 if convert_type == "FACT" and entity_name and content:
-                    # エンティティ記憶に保存
-                    em_manager = EntityMemoryManager(self.room_name)
-                    em_manager.create_or_update_entry(
-                        entity_name, 
-                        content, 
-                        consolidate=True, 
-                        api_key=self.api_key
-                    )
-                    print(f"    → 問い「{topic[:20]}...」を FACT としてエンティティ記憶「{entity_name}」に保存")
-                    
+                    # エンティティ記憶に保存（entity_memory_manager 削除済み - memx経路）
+                    from tools.memx_tools import memx_ingest
+                    try:
+                        memx_ingest.invoke({
+                            "store": "knowledge",
+                            "title": entity_name,
+                            "body": content,
+                            "room_name": self.room_name,
+                            "metadata": {"consolidate": True}
+                        })
+                        print(f"    → 問い「{topic[:20]}...」を FACT としてエンティティ記憶「{entity_name}」に保存")
+                    except Exception as e:
+                        print(f"    → エンティティ保存エラー: {e}")
+
                     # Phase G: 発見エピソード記憶を生成
                     self._create_discovery_episode(topic, content)
-                    
+
                     mm.mark_question_converted(topic)
                     converted_count += 1
-                    
+
                 elif convert_type == "INSIGHT" and content:
                     # 夢日記（insights.json）に保存
                     insight_record = {
@@ -733,10 +747,10 @@ class DreamingManager:
                     }
                     self._save_insight(insight_record)
                     print(f"    → 問い「{topic[:20]}...」を INSIGHT として夢日記に保存")
-                    
+
                     # Phase G: 発見エピソード記憶を生成
                     self._create_discovery_episode(topic, content)
-                    
+
                     mm.mark_question_converted(topic)
                     converted_count += 1
                     
@@ -755,29 +769,30 @@ class DreamingManager:
         """
         Phase G: 知識獲得時に発見エピソード記憶を生成する。
         「発見の喜び」をRAG検索で想起可能にする。
-        
+        （memx journal 経路）
+
         Args:
             topic: 解決された問いのトピック
             content: 発見された内容
         """
         try:
-            epm = EpisodicMemoryManager(self.room_name)
-            today = datetime.datetime.now().strftime('%Y-%m-%d')
-            now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
+            from tools.memx_tools import memx_ingest
+
             # 発見内容を要約（100文字まで）
             content_summary = content[:100] + "..." if len(content) > 100 else content
             summary = f"【発見】「{topic}」について新たな発見: {content_summary}"
-            
-            # 発見エピソード記憶を生成
-            epm._append_single_episode({
-                "date": today,
-                "summary": summary,
-                "arousal": 0.6,        # 発見の喜び
-                "arousal_max": 0.6,
-                "type": "discovery",    # 発見タイプのマーカー
-                "source_question": topic,
-                "created_at": now_str
+
+            # memx journal 経路で保存
+            memx_ingest.invoke({
+                "store": "journal",
+                "title": f"発見: {topic[:50]}",
+                "body": summary,
+                "room_name": self.room_name,
+                "metadata": {
+                    "arousal": 0.6,
+                    "type": "discovery",
+                    "source_question": topic
+                }
             })
             print(f"    ✨ 発見エピソード記憶を生成: {topic[:30]}...")
         except Exception as e:

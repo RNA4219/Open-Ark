@@ -636,7 +636,7 @@ class MotivationManager:
         
         self._state["drives"]["curiosity"]["open_questions"] = questions
         self._save_state()
-    
+
     def mark_question_asked(self, topic: str) -> bool:
         """質問が尋ねられたことをマーク"""
         questions = self._state["drives"]["curiosity"].get("open_questions", [])

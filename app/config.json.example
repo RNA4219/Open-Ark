@@ -101,5 +101,19 @@
   },
   "zhipu_api_key": "YOUR_API_KEY_HERE",
   "groq_api_key": "YOUR_API_KEY_HERE",
-  "moonshot_api_key": "YOUR_API_KEY_HERE"
+  "moonshot_api_key": "YOUR_API_KEY_HERE",
+  "memx_settings": {
+    "use_memx": false,
+    "memx_api_addr": "http://127.0.0.1:7766",
+    "memx_db_path_template": "{room_dir}/memx",
+    "memx_request_timeout_sec": 10,
+    "auto_start_memx": false,
+    "gc_execute_enabled": false,
+    "gc_default_criteria": {
+      "age_days_min": 30,
+      "access_count_max": 0,
+      "exclude_tags": ["important", "persistent"]
+    },
+    "migrate_preserve_source": true
+  }
 }

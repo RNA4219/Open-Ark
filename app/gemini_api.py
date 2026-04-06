@@ -26,8 +26,8 @@ import config_manager
 import constants
 import room_manager
 import utils
-import signature_manager 
-from episodic_memory_manager import EpisodicMemoryManager
+import signature_manager
+# episodic_memory_manager は削除済み - memx_recall を使用
 
 # --- トークン計算関連 (変更なし) ---
 def get_model_token_limits(model_name: str, api_key: str, provider: str = None) -> Optional[Dict[str, int]]:
@@ -1319,10 +1319,16 @@ def count_input_tokens(**kwargs):
                     if not oldest_log_date_str:
                         oldest_log_date_str = datetime.datetime.now().strftime('%Y-%m-%d')
 
-                    manager = EpisodicMemoryManager(room_name)
-                    episodic_text = manager.get_episodic_context(oldest_log_date_str, days_num)
-                    
-                    if episodic_text:
+                    # memx_recall 経由でエピソード記憶を取得
+                    from tools.memx_tools import memx_recall
+                    episodic_text = memx_recall.invoke({
+                        "query": f"過去{days_num}日間の出来事",
+                        "room_name": room_name,
+                        "recall_mode": "recent",
+                        "top_k": 10
+                    })
+
+                    if episodic_text and "見つかりません" not in episodic_text:
                         episodic_memory_section = (
                             f"\n### エピソード記憶（中期記憶: {oldest_log_date_str}以前の{days_num}日間）\n"
                             f"以下は、現在の会話ログより前の出来事の要約です。文脈として参照してください。\n"

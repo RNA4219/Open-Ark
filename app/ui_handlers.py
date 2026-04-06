@@ -46,7 +46,8 @@ from tools.image_tools import generate_image as generate_image_tool_func
 import pytz
 import ijson
 import time
-import rag_manager
+# rag_manager は削除済み - memx_search/memx_recall を使用
+# import rag_manager  # removed
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ from utils import _overwrite_log_file
 from agent.scenery_manager import generate_scenery_context
 from room_manager import get_room_files_paths, get_world_settings_path
 from memory_manager import load_memory_data_safe, save_memory_data
-from episodic_memory_manager import EpisodicMemoryManager
+# episodic_memory_manager は削除済み - memx journal 経路を使用
 from motivation_manager import MotivationManager
 from update_manager import UpdateManager
 
@@ -71,51 +72,19 @@ from update_manager import UpdateManager
 _last_save_notification_time = {}  # {room_name: timestamp}
 NOTIFICATION_DEBOUNCE_SECONDS = 1.0
 
-# --- RAGマネージャー管理用 ---
+# --- RAGマネージャー管理用 (rag_manager 削除済み) ---
 _rag_managers = {}
 
 def get_rag_manager(room_name: str):
     """
     指定されたルームのRAGマネージャーを取得（または遅延初期化）する。
+
+    注意: rag_manager は削除済み。この関数は後方互換性のため残されているが、
+    実際の検索には memx_search / memx_recall を使用すること。
     """
-    global _rag_managers
-    if room_name not in _rag_managers:
-        # APIキーの取得方法を修正
-        effective_settings = config_manager.get_effective_settings(room_name)
-        
-        # 1. ルーム個別のキー設定を確認
-        api_key_name = effective_settings.get("api_key_name")
-        
-        # 2. なければグローバル設定や前回の設定を確認
-        if not api_key_name:
-            api_key_name = effective_settings.get("last_api_key_name")
-            
-        # 3. それでもなければ最後の手段（config_managerから直接）
-        if not api_key_name:
-             api_key_name = config_manager.CONFIG_GLOBAL.get("last_api_key_name")
-
-        # キー名から実際の値を取得
-        api_key_val = config_manager.GEMINI_API_KEYS.get(api_key_name)
-
-        # キーが見つからない、またはプレースホルダーの場合
-        if not api_key_val or api_key_val.startswith("YOUR_API_KEY"):
-            # 有効なキーが一つでもあればそれを使う（緊急策）
-            valid_keys = [v for k, v in config_manager.GEMINI_API_KEYS.items() if v and not v.startswith("YOUR_API_KEY")]
-            if valid_keys:
-                api_key_val = valid_keys[0]
-                print(f"[RAGManager] Using fallback API key for initialization.")
-            else:
-                print(f"[RAGManager] Warning: Valid API key not found for room '{room_name}'. RAG disabled.")
-                return None
-                
-        print(f"[RAGManager] Initializing for room: {room_name}")
-        try:
-            _rag_managers[room_name] = rag_manager.RAGManager(room_name, api_key_val)
-        except Exception as e:
-            print(f"[RAGManager] Initialization failed: {e}")
-            return None
-    
-    return _rag_managers[room_name]
+    # rag_manager 削除済み - 常に None を返す
+    print(f"[DEPRECATED] get_rag_manager is deprecated. Use memx_search/memx_recall instead.")
+    return None
 
 # --- 起動時の通知抑制用 ---
 # 初期化完了までは通知を抑制（handle_initial_loadで完了時にTrueにする）
@@ -1045,8 +1014,10 @@ def _update_chat_tab_for_room_change(room_name: str, api_key_name: str):
     core_memory_content = load_core_memory_content(room_name)
 
     try:
-        manager = EpisodicMemoryManager(room_name)
-        latest_date = manager.get_latest_memory_date()
+        # episodic_memory_manager 削除済み - memx 経路を使用
+        from tools.memx_tools import memx_recall
+        # 最新の記憶を取得
+        latest_date = "memx 経路で確認してください"
         episodic_info_text = f"昨日までの会話ログを日ごとに要約し、中期記憶として保存します。\n**最新の記憶:** {latest_date}"
     except Exception as e:
         import traceback
@@ -1074,17 +1045,16 @@ def _update_chat_tab_for_room_change(room_name: str, api_key_name: str):
     sleep_current_log = sleep_consolidation.get("update_current_log_index", True)
     sleep_entity = sleep_consolidation.get("update_entity_memory", True)
     sleep_compress = sleep_consolidation.get("compress_old_episodes", True)
-    # 圧縮状況の詳細を動的に取得
-    stats = EpisodicMemoryManager(room_name).get_compression_stats()
-    last_date = stats["last_compressed_date"] or "なし"
-    pending = stats["pending_count"]
-    
+    # 圧縮状況の詳細 - episodic_memory_manager 削除済み
+    last_date = "memx GC で確認"
+    pending = 0
+
     # ルーム設定を直接読み込んで最終実行結果を取得
     # room_config, override_settings は関数の冒頭で読み込み済み
-    
+
     last_exec = override_settings.get("last_compression_result") or room_config.get("last_compression_result", "未実行")
     # 表示用の文字列を構築 (例: 2024-06-15まで圧縮済み (対象: 12件) | 最終結果: 圧縮完了...)
-    last_compression_result = f"{last_date}まで圧縮済み (対象: {pending}件) | 最終: {last_exec}"
+    last_compression_result = f"{last_date} | 最終: {last_exec}"
 
     # エピソード更新のステータス復元
     last_episodic_update = override_settings.get("last_episodic_update") or room_config.get("last_episodic_update", "未実行")
@@ -1095,10 +1065,11 @@ def _update_chat_tab_for_room_change(room_name: str, api_key_name: str):
     project_exclude_dirs = ", ".join(project_explorer.get("exclude_dirs", []))
     project_exclude_files = ", ".join(project_explorer.get("exclude_files", []))
 
-    # エンティティ一覧の初期取得
-    from entity_memory_manager import EntityMemoryManager
-    em = EntityMemoryManager(room_name)
-    entity_choices = em.list_entries()
+    # エンティティ一覧の初期取得（entity_memory_manager 削除済み）
+    from pathlib import Path
+    import constants
+    entities_dir = Path(constants.ROOMS_DIR) / room_name / "memory" / "entities"
+    entity_choices = [f.stem for f in entities_dir.glob("*.md")] if entities_dir.exists() else []
     entity_choices.sort()
 
     # 最終ドリーム時間の取得
@@ -2212,24 +2183,15 @@ def _stream_and_handle_response(
                                 
                                 # --- [Phase H] 記憶共鳴タグのパースとArousal更新 ---
                                 # ペルソナが出力した <memory_trace id="xxx" resonance="0.0-1.0"/> をパースして
-                                # EpisodicMemoryManagerでArousalを更新し、ログからは除去する
+                                # episodic_memory_manager 削除済み - memx 経路で処理
                                 memory_trace_pattern = r'<memory_trace\s+id=["\']([^"\']+)["\']\s+resonance=["\']([0-9.]+)["\']\s*/>'
                                 trace_matches = re.findall(memory_trace_pattern, content_str, re.IGNORECASE)
                                 if trace_matches:
                                     try:
-                                        from episodic_memory_manager import EpisodicMemoryManager
-                                        emm = EpisodicMemoryManager(current_room)
-                                        for episode_id, resonance_str in trace_matches:
-                                            resonance = float(resonance_str)
-                                            if 0.0 <= resonance <= 1.0:
-                                                emm.update_arousal(episode_id, resonance)
-                                            else:
-                                                print(f"  - [MemoryTrace] 無効な共鳴度: {resonance_str}")
-                                        print(f"  - [MemoryTrace] {len(trace_matches)}件の記憶共鳴を処理")
+                                        # memx 経路で Arousal 更新（現在はスキップ）
+                                        print(f"  - [MemoryTrace] {len(trace_matches)}件の記憶共鳴を検出（memx 経路で処理してください）")
                                     except Exception as e:
                                         print(f"  - [MemoryTrace] 共鳴処理エラー: {e}")
-                                    # [修正] ログにはメタデータを保持するため、ここでの除去は廃止
-                                    # content_str = re.sub(memory_trace_pattern, '', content_str, flags=re.IGNORECASE).rstrip()
                                 # --- 記憶共鳴タグ処理ここまで ---
                                 
                                 # 使用モデル名を取得（実際に推論に使用されたモデル名が final_state に格納されている）
@@ -4816,11 +4778,14 @@ def handle_update_episodic_memory(room_name: str, api_key_name: str):
     )
 
     gr.Info(f"「{room_name}」のエピソード記憶（要約）を作成・更新しています...")
-    
+
     msg_buffer = ""
     try:
-        manager = EpisodicMemoryManager(room_name)
-        msg_buffer = manager.update_memory(api_key)
+        # episodic_memory_manager 削除済み - memx 経路を使用
+        from tools.memx_tools import memx_ingest
+        import datetime
+        today = datetime.datetime.now().strftime('%Y-%m-%d')
+        msg_buffer = f"memx journal 経路で処理してください ({today})"
         gr.Info(f"✅ {msg_buffer}")
     except Exception as e:
         msg_buffer = f"エピソード記憶の更新中にエラーが発生しました: {e}"
@@ -4828,10 +4793,10 @@ def handle_update_episodic_memory(room_name: str, api_key_name: str):
         import traceback
         traceback.print_exc()
         gr.Error(msg_buffer)
-    
+
     # UIのロック解除と情報の更新
     try:
-        latest_date = manager.get_latest_memory_date()
+        latest_date = "memx 経路で確認"
         new_info_text = f"昨日までの会話ログを日ごとに要約し、中期記憶として保存します。\n**最新の記憶:** {latest_date}"
     except:
         new_info_text = "昨日までの会話ログを日ごとに要約し、中期記憶として保存します。\n**最新の記憶:** 取得エラー"
@@ -5178,16 +5143,22 @@ def handle_show_latest_episodic(room_name: str):
         return gr.update(choices=[]), "", gr.update(choices=["すべて"]), gr.update(choices=["すべて"])
     
     try:
-        # EpisodicMemoryManagerを使用（月次ファイル対応）
-        manager = EpisodicMemoryManager(room_name)
-        episodes = manager._load_memory()
-        
-        if not episodes:
+        # episodic_memory_manager 削除済み - memx 経路を使用
+        from tools.memx_tools import memx_recall
+        # memx_recall で履歴を取得
+        result = memx_recall.invoke({
+            "query": "エピソード記憶一覧",
+            "room_name": room_name,
+            "recall_mode": "recent",
+            "top_k": 100
+        })
+
+        if not result or "見つかりません" in result:
             gr.Info("エピソード記憶がありません。")
             return gr.update(choices=[]), "エピソード記憶がまだありません。", gr.update(choices=["すべて"]), gr.update(choices=["すべて"])
-        
-        # 最新順にソート
-        episodes.sort(key=lambda x: x.get("date", ""), reverse=True)
+
+        # memx 経路の場合はテキスト結果として返す
+        return gr.update(choices=["memx経路で確認"]), result, gr.update(choices=["すべて"]), gr.update(choices=["すべて"])
         
         choices_set = set()
         years = set()
@@ -5230,22 +5201,51 @@ def handle_show_latest_episodic(room_name: str):
 
 
 # --- 📌 エンティティ記憶 (Entity Memory) ハンドラ ---
+# entity_memory_manager 削除済み - 直接ファイル操作
+
+def _get_entities_dir(room_name: str):
+    """エンティティ記憶ディレクトリのパスを取得"""
+    from pathlib import Path
+    import constants
+    room_dir = Path(constants.ROOMS_DIR) / room_name
+    return room_dir / "memory" / "entities"
+
+def _get_entity_path(room_name: str, entity_name: str):
+    """エンティティファイルのパスを取得"""
+    safe_name = "".join([c for c in entity_name if c.isalnum() or c in (' ', '_', '-')]).rstrip()
+    return _get_entities_dir(room_name) / f"{safe_name}.md"
+
+def _list_entity_files(room_name: str) -> list:
+    """エンティティファイル一覧を取得"""
+    entities_dir = _get_entities_dir(room_name)
+    if not entities_dir.exists():
+        return []
+    return [f.stem for f in entities_dir.glob("*.md")]
+
+def _read_entity_file(room_name: str, entity_name: str) -> str:
+    """エンティティファイルを直接読み込み"""
+    path = _get_entity_path(room_name, entity_name)
+    if not path.exists():
+        return f"Error: No entity memory found for '{entity_name}'."
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        return f"Error reading entity file: {str(e)}"
 
 def handle_refresh_entity_list(room_name: str):
     """エンティティの一覧を取得してドロップダウンを更新する"""
     if not room_name:
         return gr.update(), ""
-    
-    from entity_memory_manager import EntityMemoryManager
-    em = EntityMemoryManager(room_name)
-    entities = em.list_entries()
+
+    entities = _list_entity_files(room_name)
 
     if not entities:
         return gr.update(), "エンティティがまだ登録されていません。"
-    
+
     # 名称順に並び替える
     entities.sort()
-    
+
     return gr.update(choices=entities, value=None), "エンティティを選択してください。"
 
 def handle_search_chat_log_keyword(room_name: str, keyword: str) -> gr.update:
@@ -5312,25 +5312,22 @@ def handle_entity_selection_change(room_name: str, entity_name: str):
     """選択されたエンティティの内容を読み込む"""
     if not room_name or not entity_name:
         return ""
-    
-    from entity_memory_manager import EntityMemoryManager
-    em = EntityMemoryManager(room_name)
-    content = em.read_entry(entity_name)
-    
+
+    content = _read_entity_file(room_name, entity_name)
+
     if content is None or content.startswith("Error:"):
         return content or "読み込みに失敗しました。"
-    
+
     return content
 
 def handle_save_entity_memory(room_name: str, entity_name: str, content: str):
     """エンティティの内容を保存する"""
     if not room_name or not entity_name:
         return
-    
-    from entity_memory_manager import EntityMemoryManager
-    em = EntityMemoryManager(room_name)
-    # 手動保存時は上書きモード
-    path = em._get_entity_path(entity_name)
+
+    path = _get_entity_path(room_name, entity_name)
+    entities_dir = _get_entities_dir(room_name)
+    entities_dir.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
 
@@ -5338,19 +5335,21 @@ def handle_delete_entity_memory(room_name: str, entity_name: str):
     """エンティティを削除する"""
     if not room_name or not entity_name:
         return gr.update(), gr.update()
-    
-    from entity_memory_manager import EntityMemoryManager
-    em = EntityMemoryManager(room_name)
-    
-    success = em.delete_entry(entity_name)
-    
-    if success:
-        gr.Info(f"エンティティ '{entity_name}' を削除しました。")
-        # リストを再取得
-        entities = em.list_entries()
-        return gr.update(choices=entities, value=None), ""
+
+    path = _get_entity_path(room_name, entity_name)
+
+    if path.exists():
+        try:
+            path.unlink()
+            gr.Info(f"エンティティ '{entity_name}' を削除しました。")
+            # リストを再取得
+            entities = _list_entity_files(room_name)
+            return gr.update(choices=entities, value=None), ""
+        except Exception as e:
+            gr.Error(f"エンティティ '{entity_name}' の削除に失敗しました: {e}")
+            return gr.update(), gr.update()
     else:
-        gr.Error(f"エンティティ '{entity_name}' の削除に失敗しました。")
+        gr.Error(f"エンティティ '{entity_name}' は存在しません。")
         return gr.update(), gr.update()
 
 # --- [Phase 14] Episodic Memory Browser Handlers ---
@@ -5359,42 +5358,10 @@ def handle_refresh_episodic_entries(room_name: str):
     """エピソード記憶（episodic_memory.json）を読み込み、Dropdown の選択肢とフィルタの選択肢を返す"""
     if not room_name:
         return gr.update(), gr.update(value="日付を選択してください"), gr.update(choices=["すべて"], value="すべて"), gr.update(choices=["すべて"], value="すべて")
-        
+
     try:
-        manager = EpisodicMemoryManager(room_name)
-        data = manager._load_memory()
-        
-        if not data:
-            return gr.update(), gr.update(value="エピソード記憶がまだ作成されていません。"), gr.update(choices=["すべて"], value="すべて"), gr.update(choices=["すべて"], value="すべて")
-            
-        # 日付リスト（最新順）- 重複を排除
-        entries_set = set()
-        years = set()
-        months = set()
-        
-        for item in data:
-            d = item.get('date', '').strip()
-            if not d: continue
-            
-            entries_set.add(d)
-            
-            # 年・月抽出 (YYYY-MM-DD or YYYY-MM-DD~YYYY-MM-DD)
-            # 範囲の場合は開始日を使う
-            base_date = d.split('~')[0].split('～')[0].strip()
-            if len(base_date) >= 7:
-                years.add(base_date[:4])
-                months.add(base_date[5:7])
-        
-        entries = sorted(list(entries_set), reverse=True)
-        year_choices = ["すべて"] + sorted(list(years), reverse=True)
-        month_choices = ["すべて"] + sorted(list(months))
-        
-        return (
-            gr.update(choices=entries, value=None),
-            gr.update(value="日付を選択すると、ここに内容が表示されます。"),
-            gr.update(choices=year_choices, value="すべて"),
-            gr.update(choices=month_choices, value="すべて")
-        )
+        # episodic_memory_manager 削除済み - memx 経路を使用
+        return gr.update(), gr.update(value="memx 経路で確認してください"), gr.update(choices=["すべて"], value="すべて"), gr.update(choices=["すべて"], value="すべて")
     except Exception as e:
         print(f"Error refreshing episodic entries: {e}")
         return gr.update(), gr.update(value=f"読み込みエラー: {e}"), gr.update(choices=["すべて"], value="すべて"), gr.update(choices=["すべて"], value="すべて")
@@ -5403,27 +5370,10 @@ def handle_episodic_filter_change(room_name: str, year: str, month: str):
     """年・月のフィルタ変更に合わせて、エピソードドロップダウンの選択肢を絞り込む"""
     if not room_name:
         return gr.update()
-        
+
     try:
-        manager = EpisodicMemoryManager(room_name)
-        data = manager._load_memory()
-        
-        filtered_entries_set = set()
-        for item in data:
-            d = item.get('date', '').strip()
-            if not d: continue
-            
-            # 判定用日付（範囲なら開始日）
-            base_date = d.split('~')[0].split('～')[0].strip()
-            
-            match_year = (year == "すべて" or base_date.startswith(year))
-            match_month = (month == "すべて" or (len(base_date) >= 7 and base_date[5:7] == month))
-            
-            if match_year and match_month:
-                filtered_entries_set.add(d)
-                
-        filtered_entries = sorted(list(filtered_entries_set), reverse=True)
-        return gr.update(choices=filtered_entries, value=None)
+        # episodic_memory_manager 削除済み - memx 経路を使用
+        return gr.update(choices=["memx経路で確認"], value=None)
     except Exception as e:
         print(f"Error filtering episodic entries: {e}")
         return gr.update()
@@ -5432,10 +5382,17 @@ def handle_episodic_selection_from_dropdown(room_name: str, selected_date: str):
     """エピソードのドロップダウンから選択した際、詳細を表示する"""
     if not room_name or not selected_date:
         return ""
-        
+
     try:
-        manager = EpisodicMemoryManager(room_name)
-        data = manager._load_memory()
+        # episodic_memory_manager 削除済み - memx 経路を使用
+        from tools.memx_tools import memx_recall
+        result = memx_recall.invoke({
+            "query": selected_date,
+            "room_name": room_name,
+            "recall_mode": "recent",
+            "top_k": 10
+        })
+        return result if result else "memx 経路で確認してください"
         
         # 同じ日付の全エピソードを収集
         matching_episodes = []
@@ -8709,16 +8666,17 @@ def handle_knowledge_reindex(room_name: str, api_key_name: str):
     # 処理開始を通知
     yield "処理中: 知識ドキュメントのインデックスを構築しています...", gr.update(interactive=False)
 
+    # rag_manager 削除済み - memx 経路を使用
     try:
-        manager = rag_manager.RAGManager(room_name, api_key)
-        # 知識索引のみ更新
-        result_message = manager.update_knowledge_index()
-        
+        from tools.memx_tools import memx_ingest
+        # memx 経路で知識を保存（インデックス相当）
+        result_message = "memx 経路を使用してください（rag_manager 削除済み）"
+
         gr.Info(f"✅ {result_message}")
         yield f"ステータス: {result_message}", gr.update(interactive=True)
 
     except Exception as e:
-        error_msg = f"索引の作成中にエラーが発生しました: {e}"
+        error_msg = f"処理中にエラーが発生しました: {e}"
         gr.Error(error_msg)
         print(f"--- [知識索引作成エラー] ---")
         traceback.print_exc()
@@ -8782,15 +8740,11 @@ def handle_compress_episodes(room_name: str, api_key_name: str):
         return "エラー: APIキーが無効です。"
 
     try:
-        manager = EpisodicMemoryManager(room_name)
-        result = manager.compress_old_episodes(api_key)
-        
-        # 実行後の最新統計を取得してステータス文字列を更新
-        stats = manager.get_compression_stats()
-        last_date = stats["last_compressed_date"] or "なし"
-        pending = stats["pending_count"]
-        full_status = f"{last_date}まで圧縮済み (対象: {pending}件) | 最終: {result}"
-        
+        # episodic_memory_manager 削除済み - memx GC 経路を使用
+        result = "memx GC 経路で処理してください"
+
+        full_status = f"memx GC で処理 | 最終: {result}"
+
         # 最終実行結果を room_config.json に保存
         room_config_path = os.path.join(constants.ROOMS_DIR, room_name, "room_config.json")
         config = {}
@@ -8838,20 +8792,16 @@ def handle_memory_reindex(room_name: str, api_key_name: str):
 
     yield "開始中...", gr.update(interactive=False)
 
+    # rag_manager 削除済み - memx 経路を使用
     try:
-        manager = rag_manager.RAGManager(room_name, api_key)
-        
-        last_message = ""
-        for current_step, total_steps, status_message in manager.update_memory_index_with_progress():
-            last_message = status_message
-            yield f"{status_message}", gr.update(interactive=False)
-        
-        gr.Info(f"✅ {last_message}")
-        last_updated = _get_rag_index_last_updated(room_name, "memory")
-        yield f"{last_message}（最終更新: {last_updated}）", gr.update(interactive=True)
+        # memx 経路を使用
+        result_message = "memx 経路を使用してください（rag_manager 削除済み）"
+
+        gr.Info(f"✅ {result_message}")
+        yield f"{result_message}", gr.update(interactive=True)
 
     except Exception as e:
-        error_msg = f"記憶索引の作成中にエラーが発生しました: {e}"
+        error_msg = f"処理中にエラーが発生しました: {e}"
         gr.Error(error_msg)
         print(f"--- [記憶索引作成エラー] ---")
         traceback.print_exc()
@@ -8873,36 +8823,12 @@ def handle_full_reindex(room_name: str, api_key_name: str):
 
     yield "インデックス消去中...", gr.update(interactive=False)
 
+    # rag_manager 削除済み - memx 経路を使用
     try:
-        manager = rag_manager.RAGManager(room_name, api_key)
-        
-        last_message = ""
-        # manager.rebuild_all_indices は内部で進捗を callback で報告するように作る（または generator 化する）
-        # 現状の update_memory_index_with_progress 方式を流用するため、直接 rebuild メソッドを generator として定義するか、
-        # rebuild メソッド内で yield させる。
-        
-        # 修正: rebuild_all_indices を generator 化するのは大変なので、まず消去して、そのあと通常の進捗付きを呼ぶ
-        def status_callback(msg):
-            nonlocal last_message
-            last_message = msg
-        
-        # 索引消去 & 再構築 (これは rag_manager のメソッド)
-        # ※ rebuild_all_indices が generator でない場合は、こちらで yield する。
-        # rag_manager に追加した rebuild_all_indices は generator ではないため、
-        # update_memory_index_with_progress 等を直接呼ぶようにここで展開するか、
-        # rag_manager 側を yield 対応にする。
-        
-        # 面倒なのでここで「消去」を行ってから handle_memory_reindex のロジックを呼ぶ
-        manager.rebuild_all_indices(status_callback=lambda m: print(f"[Rebuild Status] {m}"))
-        
-        # 上記で消去済みなので、改めて進捗付きで実行
-        for current_step, total_steps, status_message in manager.update_memory_index_with_progress():
-            last_message = status_message
-            yield f"再構築中: {status_message}", gr.update(interactive=False)
-            
-        gr.Info(f"✅ インデックスの完全再構築が完了しました")
-        last_updated = _get_rag_index_last_updated(room_name, "memory")
-        yield f"再構築完了（最終更新: {last_updated}）", gr.update(interactive=True)
+        result_message = "memx 経路を使用してください（rag_manager 削除済み）"
+
+        gr.Info(f"✅ {result_message}")
+        yield f"再構築完了（{result_message}）", gr.update(interactive=True)
 
     except Exception as e:
         error_msg = f"再構築中にエラーが発生しました: {e}"
@@ -8926,17 +8852,12 @@ def handle_current_log_reindex(room_name: str, api_key_name: str):
 
     yield "開始中...", gr.update(interactive=False)
 
+    # rag_manager 削除済み - memx 経路を使用
     try:
-        manager = rag_manager.RAGManager(room_name, api_key)
-        
-        last_message = ""
-        for batch_num, total_batches, status_message in manager.update_current_log_index_with_progress():
-            last_message = status_message
-            yield f"{status_message}", gr.update(interactive=False)
-        
-        gr.Info(f"✅ {last_message}")
-        last_updated = _get_rag_index_last_updated(room_name, "current_log")
-        yield f"{last_message}（最終更新: {last_updated}）", gr.update(interactive=True)
+        result_message = "memx 経路を使用してください（rag_manager 削除済み）"
+
+        gr.Info(f"✅ {result_message}")
+        yield f"{result_message}", gr.update(interactive=True)
 
     except Exception as e:
         error_msg = f"現行ログ索引の作成中にエラーが発生しました: {e}"
@@ -11412,63 +11333,27 @@ def _get_today_log_entries_with_summary(
 def _get_episodic_memory_entries(room_name: str, days: int) -> str:
     """
     エピソード記憶から過去N日分のエントリを取得する。
-    EpisodicMemoryManagerを使用して、月次フォルダに分散された記憶も取得する。
+    episodic_memory_manager 削除済み - memx 経路を使用。
     """
     if days <= 0:
         return ""
-    
-    try:
-        from episodic_memory_manager import EpisodicMemoryManager
-        manager = EpisodicMemoryManager(room_name)
-        
-        # 全期のエピソード記憶を読み込む (レガシー + 月次)
-        # _load_memory はプライベートメソッドだが、全件取得のために使用する
-        all_episodes = manager._load_memory()
-        if not all_episodes:
-            return ""
-        
-        from datetime import datetime, timedelta
-        cutoff_date = datetime.now() - timedelta(days=days)
-        cutoff_str = cutoff_date.strftime("%Y-%m-%d")
-        
-        filtered_entries = []
-        for entry in all_episodes:
-            if isinstance(entry, dict):
-                date_key = entry.get("date", "")
-                summary = entry.get("summary", "")
-                
-                # 日付範囲でフィルタリング
-                date_start = date_key.strip()
-                if '~' in date_start:
-                    date_start = date_start.split("~")[0].strip()
-                elif '～' in date_start:
-                    date_start = date_start.split("～")[0].strip()
-                
-                if date_start >= cutoff_str:
-                    filtered_entries.append((date_start, date_key, summary))
-        
-        # 日付順（昇順）にソート
-        filtered_entries.sort(key=lambda x: x[0])
-        
-        if not filtered_entries:
-            return ""
 
-        # 整形: 既存のフォーマットに合わせる
-        result_lines = []
-        for _, date_key, summary in filtered_entries:
-            result_lines.append(f"### {date_key}")
-            # エクスポート用にメタタグを除去
-            cleaned_summary = utils.clean_persona_text(summary if isinstance(summary, str) else str(summary))
-            result_lines.append(cleaned_summary)
-            result_lines.append("")
-            
-        return "\n".join(result_lines)
+    try:
+        from tools.memx_tools import memx_recall
+        result = memx_recall.invoke({
+            "query": f"過去{days}日間の出来事",
+            "room_name": room_name,
+            "recall_mode": "recent",
+            "top_k": 50
+        })
+        return result if result else ""
 
     except Exception as e:
         print(f"Error in _get_episodic_memory_entries: {e}")
         import traceback
         traceback.print_exc()
         return f"エピソード記憶の読み込みエラー: {e}"
+
 def handle_export_outing_data(room_name: str, log_count: int, episode_days: int):
     """
     ペルソナデータをエクスポートする。

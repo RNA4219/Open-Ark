@@ -38,6 +38,7 @@ from tools.entity_tools import read_entity_memory, write_entity_memory, list_ent
 from tools.chess_tools import read_board_state, perform_move, get_legal_moves, reset_game as reset_chess_game
 from tools.developer_tools import list_project_files, read_project_file
 from tools.introspection_tools import manage_open_questions, manage_goals
+from tools.memx_tools import memx_search, memx_ingest, memx_show, memx_recall
 from tools.roblox_tools import send_roblox_command, roblox_build
 from tools.roblox_screenshot import capture_roblox_screenshot
 from tools.roblox_webhook import get_spatial_data
@@ -48,14 +49,14 @@ from tools.item_tools import (
 )
 
 from room_manager import get_world_settings_path, get_room_files_paths
-from episodic_memory_manager import EpisodicMemoryManager
+# episodic_memory_manager は削除済み - memx_recall を使用
 from action_plan_manager import ActionPlanManager  
 from tools.action_tools import schedule_next_action, cancel_action_plan, read_current_plan
 from tools.notification_tools import send_user_notification
 from tools.watchlist_tools import add_to_watchlist, remove_from_watchlist, get_watchlist, check_watchlist, update_watchlist_interval
 from dreaming_manager import DreamingManager
 from goal_manager import GoalManager
-from entity_memory_manager import EntityMemoryManager
+# entity_memory_manager は削除済み - entity_tools / memx 経路を使用
 from llm_factory import LLMFactory
 
 import utils
@@ -107,6 +108,8 @@ all_tools = [
     list_project_files, read_project_file,
     # --- 内省ツール ---
     manage_open_questions, manage_goals,
+    # --- memx記憶ツール (Phase 1) ---
+    memx_search, memx_ingest, memx_show, memx_recall,
     # --- ROBLOX連携ツール ---
     send_roblox_command, roblox_build, capture_roblox_screenshot,
     # --- 食べ物・アイテムツール ---
@@ -550,27 +553,31 @@ INTENT: [emotional/factual/technical/temporal/relational]
         # ▲▲▲ ハイブリッド検索ここまで ▲▲▲
 
         # 3d. エンティティ記憶の「きっかけ」抽出 (Suggestive Recall)
-        # 会話に出たキーワードから関連するエンティティ名を探し、存在を通知する
-        em_manager = EntityMemoryManager(room_name)
-        # rag_query または keyword_query からキーワードを収集
+        # entity_memory_manager 削除済み - memx_search / entity_tools 経由
         entity_search_keywords = (rag_query + " " + keyword_query).strip()
         if entity_search_keywords:
-            matched_entities = em_manager.search_entries(entity_search_keywords)
-            if matched_entities:
-                # 最大3件まで提示
-                selection = matched_entities[:3]
-                suggestion_parts = [
-                    "【関連するエンティティ記憶の示唆】",
-                    "以下のトピックに関する過去の記録が見つかりました。必要に応じて `read_entity_memory(\"エントリ名\")` で内容を確認してください。"
-                ]
-                for entity in selection:
-                    suggestion_parts.append(f"- 「{entity}」")
-                
-                suggestion_text = "\n".join(suggestion_parts)
-                print(f"    -> エンティティ示唆: ヒット ({len(selection)}件)")
-                results.append(suggestion_text)
-            else:
-                print(f"    -> エンティティ示唆: なし")
+            try:
+                from tools.memx_tools import memx_search
+                memx_result = memx_search.invoke({
+                    "query": entity_search_keywords,
+                    "room_name": room_name,
+                    "top_k": 3
+                })
+
+                # 結果がある場合は示唆を生成
+                if memx_result and "見つかりません" not in memx_result:
+                    suggestion_parts = [
+                        "【関連するエンティティ記憶の示唆】",
+                        "以下のトピックに関する過去の記録が見つかりました。必要に応じて `read_entity_memory(\"エントリ名\")` で内容を確認してください。",
+                        memx_result
+                    ]
+                    suggestion_text = "\n".join(suggestion_parts)
+                    print(f"    -> エンティティ示唆: ヒット (memx経路)")
+                    results.append(suggestion_text)
+                else:
+                    print(f"    -> エンティティ示唆: なし")
+            except Exception as e:
+                print(f"    -> エンティティ示唆: エラー ({e})")
 
         # ▼▼▼ [2024-12-28 最適化] 話題クラスタ検索を一時無効化 ▼▼▼
         # 現状のクラスタリング精度が低く、ノイズが多いため一時無効化。
@@ -862,21 +869,24 @@ def context_generator_node(state: AgentState):
     # 1. 設定値の取得
     generation_config = state.get("generation_config", {})
     lookback_days_str = generation_config.get("episode_memory_lookback_days", "14")
-    
+
     if lookback_days_str and lookback_days_str != "0":
         try:
             lookback_days = int(lookback_days_str)
-            
-            # 2. 「今日」を基準に、過去N日間のエピソード記憶を取得
-            # 以前は「ログの最古日付」を基準にしていたが、ユーザーの期待は
-            # 「過去2日」= 今日から2日前（例: 1/21なら1/19〜1/20）
-            today_str = datetime.now().strftime('%Y-%m-%d')
 
-            # 3. エピソード記憶マネージャーから要約を取得
-            manager = EpisodicMemoryManager(room_name)
-            episodic_text = manager.get_episodic_context(today_str, lookback_days)
-            
-            if episodic_text:
+            # 2. memx_recall 経由でエピソード記憶を取得
+            # episodic_memory_manager 削除済み
+            from tools.memx_tools import memx_recall
+
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            episodic_text = memx_recall.invoke({
+                "query": f"過去{lookback_days}日間の出来事",
+                "room_name": room_name,
+                "recall_mode": "recent",
+                "top_k": 10
+            })
+
+            if episodic_text and "見つかりません" not in episodic_text:
                 episodic_memory_section = (
                     f"\n### エピソード記憶（中期記憶: 過去{lookback_days}日間）\n"
                     f"以下は、現在の会話ログより前の出来事の要約です。文脈として参照してください。\n"
@@ -1100,6 +1110,11 @@ def context_generator_node(state: AgentState):
         "update_watchlist_interval": "URLの監視頻度を変更する",
         "read_research_notes": "研究・分析ノートを読み取る",
         "plan_research_notes_edit": "研究・分析ノートの編集を計画する",
+        # --- memx記憶ツール (Phase 1) ---
+        "memx_search": "記憶を検索する（memx-resolver）",
+        "memx_ingest": "記憶を保存する（memx-resolver）",
+        "memx_show": "特定の記憶を取得する（memx-resolver）",
+        "memx_recall": "文脈に関連する記憶を呼び出す（memx-resolver）",
     }
 
     # 精度が求められる重厚なツールのための詳細指示

@@ -111,30 +111,30 @@ def manage_open_questions(
 
 
 def _create_curiosity_resolved_episode(room_name: str, topic: str, context: str, reflection: str = None):
-    """問い解決時に高Arousalエピソード記憶を生成する"""
+    """問い解決時に高Arousalエピソード記憶を生成する（memx journal経路）"""
     import datetime
-    from episodic_memory_manager import EpisodicMemoryManager
-    
+
     try:
-        em = EpisodicMemoryManager(room_name)
-        today = datetime.datetime.now().strftime('%Y-%m-%d')
-        now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
+        from tools.memx_tools import memx_ingest
+
         # 意味のある記憶を構築
         summary = f"問い「{topic}」を解決した。"
         if reflection:
             summary += f"\n\n【経験と教訓】\n{reflection}"
         elif context:
             summary += f"\n（背景: {context[:100]}）"
-        
-        em._append_single_episode({
-            "date": today,
-            "summary": summary,
-            "arousal": 0.8,        # 高Arousal
-            "arousal_max": 0.8,
-            "type": "curiosity_resolved",
-            "topic": topic,
-            "created_at": now_str
+
+        # memx journal 経路で保存
+        result = memx_ingest.invoke({
+            "store": "journal",
+            "title": f"問い解決: {topic[:50]}",
+            "body": summary,
+            "room_name": room_name,
+            "metadata": {
+                "arousal": 0.8,
+                "type": "curiosity_resolved",
+                "topic": topic
+            }
         })
         print(f"  ✨ 問い解決エピソード記憶を生成: {topic[:30]}...")
     except Exception as e:

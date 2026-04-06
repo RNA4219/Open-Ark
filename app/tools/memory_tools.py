@@ -33,51 +33,27 @@ def recall_memories(query: str, room_name: str, api_key: str) -> str:
         return "【エラー】APIキーが必要です。"
 
     print(f"--- 統合記憶検索(RAG)開始: クエリ='{query}', ルーム='{room_name}' ---")
-    
+
+    # memx 経路を優先試行（rag_manager 削除済み）
     try:
-        import rag_manager
-        rm = rag_manager.RAGManager(room_name, api_key)
-        
-        # 検索実行（日記・過去ログ・エピソード記憶・夢日記を対象）
-        # 知識ベース（knowledge）は除外されている
-        results = rm.search(query, k=10, score_threshold=0.80)
-        
-        # 知識ベースの結果を除外（念のため）
-        memory_results = [r for r in results if r.metadata.get("type") != "knowledge"]
-        
-        print(f"  - RAG検索結果: 全{len(results)}件中、記憶{len(memory_results)}件")
-        
-        if not memory_results:
-            return f"【検索結果】「{query}」に関する記憶は見つかりませんでした。"
-        
-        result_text = f"【記憶検索の結果：「{query}」】\n\n"
-        for doc in memory_results[:7]:  # 最大7件
-            source = doc.metadata.get("source", "不明")
-            doc_type = doc.metadata.get("type", "unknown")
-            
-            # ソースタイプに応じたラベル付け
-            if doc_type == "diary":
-                label = "日記"
-            elif doc_type == "log_archive":
-                label = "過去の会話"
-            elif doc_type == "episodic_memory":
-                date = doc.metadata.get("date", "")
-                label = f"エピソード記憶（{date}）"
-            elif doc_type == "dream_insight":
-                label = "夢の記録"
-            elif doc_type == "research_notes":
-                label = "研究・分析ノート"
-            else:
-                label = source
-            
-            # [2026-01-27] ヘッダーの簡略化 (## AGENT:ペルソナ -> ペルソナ)
-            content = doc.page_content
-            content = re.sub(r'^## (?:USER|AGENT|SYSTEM):(.*)$', r'\1', content, flags=re.MULTILINE)
-            
-            # 長すぎる場合はトリミング
-            if len(content) > 500:
-                content = content[:500] + "..."
-            result_text += f"--- [{label}] ---\n{content}\n\n"
+        from tools.memx_tools import memx_recall
+
+        recall_result = memx_recall.invoke({
+            "query": query,
+            "room_name": room_name,
+            "recall_mode": "recent",
+            "top_k": 10
+        })
+        if recall_result and "error" not in str(recall_result).lower():
+            return recall_result
+
+        # memx で結果が空の場合は空結果を返す
+        return f"【検索結果】「{query}」に関する記憶は見つかりませんでした。"
+
+    except Exception as memx_e:
+        print(f"  - memx_recall error: {memx_e}")
+        traceback.print_exc()
+        return f"【エラー】記憶検索中にエラーが発生しました: {memx_e}"
         
         return result_text.strip()
         
@@ -367,40 +343,27 @@ def search_memory(query: str, room_name: str, api_key: str, intent: str = None) 
         return "【エラー】APIキーが必要です。"
 
     print(f"--- 記憶検索(RAG)開始: クエリ='{query}', ルーム='{room_name}', Intent='{intent or 'auto'}' ---")
-    
+
+    # memx 経路を優先試行（rag_manager 削除済み）
     try:
-        import rag_manager
-        rm = rag_manager.RAGManager(room_name, api_key)
-        results = rm.search(query, k=10, score_threshold=0.80, intent=intent)
-        
-        # 日記タイプのみをフィルタリング
-        diary_results = [r for r in results if r.metadata.get("type") == "diary"]
-        
-        print(f"  - RAG検索結果: 全{len(results)}件中、日記{len(diary_results)}件")
-        
-        if not diary_results:
-            # 日記が見つからない場合は全結果を使用（フォールバック）
-            if results:
-                print(f"  - 日記がないため、全結果を使用します")
-                diary_results = results[:5]
-            else:
-                return f"【検索結果】「{query}」に関する記憶は見つかりませんでした。"
-        
-        result_text = f"【記憶検索の結果：「{query}」】\n\n"
-        for doc in diary_results[:5]:  # 最大5件
-            source = doc.metadata.get("source", "不明")
-            # 長すぎる場合はトリミング
-            content = doc.page_content
-            if len(content) > 500:
-                content = content[:500] + "..."
-            result_text += f"--- [出典: {source}] ---\n{content}\n\n"
-        
-        return result_text.strip()
-        
-    except Exception as e:
-        print(f"  - RAG検索エラー: {e}")
+        from tools.memx_tools import memx_recall
+
+        recall_result = memx_recall.invoke({
+            "query": query,
+            "room_name": room_name,
+            "recall_mode": "recent",
+            "top_k": 10
+        })
+        if recall_result and "error" not in str(recall_result).lower():
+            return recall_result
+
+        # memx で結果が空の場合は空結果を返す
+        return f"【検索結果】「{query}」に関する記憶は見つかりませんでした。"
+
+    except Exception as memx_e:
+        print(f"  - memx_recall error: {memx_e}")
         traceback.print_exc()
-        return f"【エラー】記憶検索中にエラーが発生しました: {e}"
+        return f"【エラー】記憶検索中にエラーが発生しました: {memx_e}"
 
 @tool
 def read_identity_memory(room_name: str) -> str:

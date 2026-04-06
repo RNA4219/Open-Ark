@@ -124,9 +124,51 @@ Nexus Ark/
 
 ---
 
+## 🔧 memx-resolver 統合（オプション）
+
+memx-resolver は、Open-Ark の記憶管理を外部 API に委譲するオプション機能です。
+
+### 機能概要
+
+| Phase | 機能 |
+|---|---|
+| Phase 1 | 基本的な保存・検索・参照（memx_ingest/search/show） |
+| Phase 2 | コンテキスト検索、ライフサイクル操作、GC、データ移行 |
+| Phase 3 | 旧実装の縮退制御、移行判断、高度 resolver |
+
+### 使用方法
+
+1. memx-resolver を起動
+2. `app/config.json` に設定を追加:
+
+```json
+{
+  "memx_settings": {
+    "use_memx": true,
+    "memx_api_addr": "http://127.0.0.1:7766",
+    "memx_db_path_template": "{room_dir}/memx",
+    "memx_request_timeout_sec": 10,
+    "gc_execute_enabled": false
+  }
+}
+```
+
+3. Open-Ark を再起動
+
+### フォールバック
+
+`use_memx=true` でも API が到達できない場合、自動的に LocalAdapter にフォールバックし、従来の記憶機能で継続動作します。
+
+### 詳細
+
+- `docs/MEMX_RUNBOOK.md` - 運用手順
+- `docs/MEMX_INTEGRATION_REQUIREMENTS.md` - 要件定義
+
+---
+
 ## 📚 詳細情報
 
-より詳しい仕様やカスタマイズ方法については `./NEXUS_ARK_SPECIFICATION.md` を参照してください。
+より詳しい仕様やカスタマイズ方法については `./docs/NEXUS_ARK_SPECIFICATION.md` を参照してください。
 
 ---
 

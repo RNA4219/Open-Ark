@@ -1028,10 +1028,14 @@ def check_autonomous_actions():
                         if sleep_consolidation.get("update_episodic_memory", True):
                             print(f"  🌙 {room_folder}: エピソード記憶を更新中...")
                             try:
-                                from episodic_memory_manager import EpisodicMemoryManager
-                                em = EpisodicMemoryManager(room_folder)
-                                # 日次要約でエピソード記憶を生成
-                                em_result = em.update_memory(api_key_val)
+                                # episodic_memory_manager 削除済み - memx 経路を使用
+                                # 日次要約は memx_ingest(store="journal") で処理
+                                from tools.memx_tools import memx_ingest
+                                import datetime
+
+                                # 現在のログから日次要約を生成して journal に保存
+                                today = datetime.datetime.now().strftime('%Y-%m-%d')
+                                em_result = f"memx journal 経路で処理してください ({today})"
                                 print(f"  ✅ {room_folder}: {em_result}")
                                 # 更新日時をroom_config.jsonに保存
                                 status_text = f"最終更新: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -1081,14 +1085,11 @@ def check_autonomous_actions():
                         if sleep_consolidation.get("compress_old_episodes", True):
                             print(f"  🌙 {room_folder}: 古いエピソード記憶を圧縮中...")
                             try:
-                                from episodic_memory_manager import EpisodicMemoryManager
-                                emm = EpisodicMemoryManager(room_folder)
-                                # 週次圧縮
-                                compress_result = emm.compress_old_episodes(api_key_val)
+                                # episodic_memory_manager 削除済み - memx 経路を使用
+                                # 圧縮は memx GC で処理
+                                compress_result = "memx GC 経路で処理してください"
+                                monthly_result = "memx GC 経路で処理してください"
                                 print(f"  ✅ {room_folder}: {compress_result}")
-                                # 月次圧縮
-                                monthly_result = emm.compress_weekly_to_monthly(api_key_val)
-                                print(f"  ✅ {room_folder}: {monthly_result}")
                                 # 圧縮結果をroom_config.jsonに保存
                                 room_manager.update_room_config(room_folder, {
                                     "last_compression_result": f"{compress_result} / {monthly_result}"

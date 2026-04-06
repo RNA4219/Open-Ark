@@ -12,7 +12,7 @@ from typing import List, Dict, Optional, Any
 import uuid
 
 import constants
-from episodic_memory_manager import EpisodicMemoryManager
+# episodic_memory_manager は削除済み - memx journal 経路を使用
 
 
 class GoalManager:
@@ -192,16 +192,15 @@ class GoalManager:
         """
         Phase E: 目標達成時に高Arousalエピソード記憶を生成する。
         達成体験を「輝く星」としてRAG検索で想起可能にする。
-        
+        （memx journal 経路）
+
         Args:
             goal: 達成した目標データ
             completion_note: 達成時のメモ
         """
         try:
-            em = EpisodicMemoryManager(self.room_name)
-            today = datetime.datetime.now().strftime('%Y-%m-%d')
-            now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
+            from tools.memx_tools import memx_ingest
+
             # 達成内容を要約（意味のある記憶に）
             goal_text = goal.get("goal", "目標")
             if completion_note:
@@ -209,16 +208,18 @@ class GoalManager:
                 summary = f"目標「{goal_text}」を達成した。\n\n【経験と教訓】\n{completion_note}"
             else:
                 summary = f"目標「{goal_text}」を達成し、一つの区切りを迎えた。"
-            
-            # 高Arousalエピソード記憶を生成
-            em._append_single_episode({
-                "date": today,
-                "summary": summary,
-                "arousal": 0.85,       # 少し高く設定
-                "arousal_max": 0.85,
-                "type": "achievement",
-                "goal_id": goal.get("id", ""),
-                "created_at": now_str
+
+            # memx journal 経路で保存
+            memx_ingest.invoke({
+                "store": "journal",
+                "title": f"目標達成: {goal_text[:50]}",
+                "body": summary,
+                "room_name": self.room_name,
+                "metadata": {
+                    "arousal": 0.85,
+                    "type": "achievement",
+                    "goal_id": goal.get("id", "")
+                }
             })
             print(f"✨ 達成エピソード記憶を生成: {goal_text[:30]}...")
         except Exception as e:

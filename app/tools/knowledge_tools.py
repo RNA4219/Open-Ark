@@ -9,7 +9,8 @@ import tempfile
 # 循環参照を避けるため、必要なモジュールは関数内でインポートする
 import constants
 import config_manager
-import rag_manager
+
+# rag_manager は削除候補 - 直接 import せず関数内で条件付き import
 
 @tool
 def search_knowledge_base(query: str, room_name: str, api_key: str = None) -> str:
@@ -33,38 +34,23 @@ def search_knowledge_base(query: str, room_name: str, api_key: str = None) -> st
     if not api_key or api_key.startswith("YOUR_API_KEY"):
         return f"【エラー】知識ベースの検索に必要なAPIキーが無効です。"
         
+    # memx 経路を優先試行（rag_manager 削除済み）
     try:
-        # --- [RAGManagerを使用した新しい検索ロジック] ---
-        manager = rag_manager.RAGManager(room_name, api_key)
-        
-        # 検索実行 (上位4件取得)
-        docs = manager.search(query, k=4)
-        
-        if not docs:
-            return f"【検索結果】知識ベースから「{query}」に関連する情報は見つかりませんでした。"
-        
-        # 結果を整形して返す
-        result_parts = [f'【知識ベースからの検索結果：「{query}」】\n']
-        for doc in docs:
-            # ログファイルからのヒットか、知識ドキュメントからのヒットかを判別しやすくする
-            source_name = os.path.basename(doc.metadata.get("source", "不明なソース"))
-            doc_type = doc.metadata.get("type", "unknown")
-            
-            # ログの場合は日付などもメタデータにあれば表示したいが、まずはシンプルに
-            header = f"[出典: {source_name}]"
-            if doc_type == "log_archive" or doc_type == "current_log":
-                header = f"[出典: 過去の会話ログ ({source_name})]"
+        from tools.memx_tools import memx_search
 
-            elif doc_type == "episodic_memory":
-                date = doc.metadata.get("date", "")
-                header = f"[出典: エピソード記憶（要約） - {date}]"
+        search_result = memx_search.invoke({
+            "query": query,
+            "room_name": room_name,
+            "store": "knowledge",
+            "top_k": 4
+        })
+        if search_result and "error" not in str(search_result).lower():
+            return search_result
 
-            result_parts.append(f"- {header}\n  {doc.page_content}")
+        # memx で結果が空の場合は空結果を返す
+        return f"【検索結果】知識ベースから「{query}」に関連する情報は見つかりませんでした。"
 
-        final_result = "\n".join(result_parts)
-        return final_result
-
-    except Exception as e:
-        print(f"--- [知識ベース検索エラー] ---")
+    except Exception as memx_e:
+        print(f"  - memx_search error: {memx_e}")
         traceback.print_exc()
-        return f"【エラー】知識ベースの検索中に予期せぬエラーが発生しました: {e}"
+        return f"【エラー】知識ベースの検索中にエラーが発生しました: {memx_e}"

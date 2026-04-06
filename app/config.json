@@ -1,78 +1,160 @@
 {
-    "active_provider": "google",
-    "active_openai_profile": "OpenRouter",
-    "openai_provider_settings": [
-        {
-            "name": "OpenRouter",
-            "base_url": "https://openrouter.ai/api/v1",
-            "api_key": "",
-            "default_model": "meta-llama/llama-3.3-70b-instruct:free",
-            "available_models": [
-                "meta-llama/llama-3.3-70b-instruct:free",
-                "google/gemma-3-27b-it:free",
-                "deepseek/deepseek-r1-0528:free"
-            ]
-        },
-        {
-            "name": "Groq",
-            "base_url": "https://api.groq.com/openai/v1",
-            "api_key": "",
-            "default_model": "llama-3.3-70b-versatile",
-            "available_models": [
-                "llama-3.3-70b-versatile",
-                "llama-3.1-8b-instant"
-            ]
-        },
-        {
-            "name": "Local Ollama",
-            "base_url": "http://localhost:11434/v1",
-            "api_key": "ollama",
-            "default_model": "qwen2.5:3b",
-            "tool_use_enabled": false,
-            "available_models": [
-                "qwen2.5:3b",
-                "gemma2:2b"
-            ]
-        }
-    ],
-    "gemini_api_keys": {},
-    "paid_api_key_names": [],
-    "available_models": [
-        "gemini-2.5-flash",
-        "gemini-2.5-pro",
-        "gemini-2.5-flash-lite",
-        "gemini-3-flash-preview"
-    ],
-    "default_model": "gemini-2.5-flash",
-    "image_generation_mode": "new",
-    "search_provider": "tavily",
-    "last_room": "Olivie",
-    "last_model": "gemini-2.5-flash",
-    "last_api_key_name": "",
-    "last_send_thoughts_to_api": true,
-    "last_api_history_limit_option": "today",
-    "alarm_api_history_turns": 10,
-    "notification_service": "pushover",
-    "notification_webhook_url": "",
-    "pushover_app_token": "",
-    "pushover_user_key": "",
-    "log_archive_threshold_mb": 10,
-    "log_keep_size_mb": 5,
-    "backup_rotation_count": 10,
-    "theme_settings": {
-        "active_theme": "nexus_modern",
-        "custom_themes": {}
+  "active_provider": "google",
+  "active_openai_profile": "OpenRouter",
+  "openai_provider_settings": [
+    {
+      "name": "OpenRouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key": "",
+      "default_model": "meta-llama/llama-3.3-70b-instruct:free",
+      "available_models": [
+        "deepseek/deepseek-r1-0528:free",
+        "google/gemma-3-27b-it:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-nano-30b-a3b:free",
+        "qwen/qwen3-coder:free",
+        "xiaomi/mimo-v2-flash:free"
+      ]
     },
-    "allow_external_connection": false,
-    "tavily_api_key": "",
-    "internal_model_settings": {
-        "provider": "google",
-        "processing_model": "gemini-2.5-flash-lite",
-        "summarization_model": "gemini-2.5-flash",
-        "supervisor_model": "gemini-2.5-flash-lite"
+    {
+      "name": "Groq",
+      "base_url": "https://api.groq.com/openai/v1",
+      "api_key": "",
+      "default_model": "llama-3.3-70b-versatile",
+      "available_models": [
+        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile",
+        "openai/gpt-oss-120b",
+        "qwen/qwen3-32b"
+      ]
     },
-    "zhipu_api_key": "",
-    "groq_api_key": "",
-    "moonshot_api_key": "",
-    "setup_completed": false
+    {
+      "name": "Local Ollama",
+      "base_url": "http://localhost:11434/v1",
+      "api_key": "ollama",
+      "default_model": "qwen2.5:3b",
+      "tool_use_enabled": false,
+      "available_models": [
+        "gemma2:2b",
+        "phi3.5",
+        "qwen2.5:0.5b",
+        "qwen2.5:3b"
+      ]
+    },
+    {
+      "name": "OpenAI Official",
+      "base_url": "https://api.openai.com/v1",
+      "api_key": "",
+      "default_model": "gpt-5.2-2025-12-11",
+      "available_models": [
+        "gpt-5.2-2025-12-11",
+        "chatgpt-4o-latest"
+      ]
+    },
+    {
+      "name": "Zhipu AI",
+      "base_url": "https://open.bigmodel.cn/api/paas/v4",
+      "api_key": "",
+      "default_model": "glm-4.7-flash",
+      "available_models": [
+        "glm-4.7-flash",
+        "glm-4.7",
+        "glm-4-plus",
+        "glm-4.5",
+        "glm-4.5-air",
+        "glm-zero-preview"
+      ]
+    },
+    {
+      "name": "Moonshot AI",
+      "base_url": "https://api.moonshot.ai/v1",
+      "api_key": "",
+      "default_model": "kimi-k2.5",
+      "available_models": [
+        "kimi-k2.5",
+        "moonshot-v1-8k",
+        "moonshot-v1-32k",
+        "moonshot-v1-128k"
+      ]
+    }
+  ],
+  "gemini_api_keys": {},
+  "paid_api_key_names": [],
+  "available_models": [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash-lite",
+    "gemini-3-flash-preview",
+    "gemini-3.1-pro-preview",
+    "gemini-3.1-flash-lite-preview"
+  ],
+  "default_model": "gemini-2.5-flash",
+  "image_generation_provider": "gemini",
+  "image_generation_model": "gemini-2.5-flash-image",
+  "image_generation_openai_settings": {
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "",
+    "model": "gpt-image-1"
+  },
+  "available_image_models": {
+    "gemini": [
+      "gemini-2.5-flash-image",
+      "gemini-3-pro-image-preview",
+      "gemini-3.1-flash-image-preview"
+    ],
+    "openai": [
+      "dall-e-2",
+      "dall-e-3",
+      "gpt-image-1",
+      "gpt-image-1.5"
+    ]
+  },
+  "search_provider": "tavily",
+  "tavily_api_key": "",
+  "last_room": "Default",
+  "last_model": "gemini-2.5-flash",
+  "last_api_key_name": "",
+  "last_send_thoughts_to_api": true,
+  "last_api_history_limit_option": "50",
+  "alarm_api_history_turns": 10,
+  "notification_service": "pushover",
+  "notification_webhook_url": "",
+  "pushover_app_token": "",
+  "pushover_user_key": "",
+  "log_archive_threshold_mb": 10,
+  "log_keep_size_mb": 5,
+  "backup_rotation_count": 10,
+  "theme_settings": {
+    "active_theme": "nexus_modern",
+    "custom_themes": {}
+  },
+  "watchlist_settings": {
+    "notify_on_change": true
+  },
+  "autonomous_settings": {
+    "enabled": false,
+    "inactivity_minutes": 120,
+    "quiet_hours_start": "00:00",
+    "quiet_hours_end": "07:00"
+  },
+  "image_generation_mode": "new",
+  "allow_external_connection": false,
+  "internal_model_settings": {
+    "provider": "google",
+    "processing_model": "gemini-2.5-flash-lite",
+    "summarization_model": "gemini-2.5-flash",
+    "supervisor_model": "gemini-2.5-flash-lite"
+  },
+  "zhipu_api_key": "",
+  "groq_api_key": "",
+  "moonshot_api_key": "",
+  "setup_completed": false,
+  "memx_settings": {
+    "use_memx": true,
+    "memx_api_addr": "http://127.0.0.1:7766",
+    "memx_db_path_template": "{room_dir}/memx",
+    "memx_request_timeout_sec": 10,
+    "gc_execute_enabled": false,
+    "migrate_preserve_source": true
+  }
 }
